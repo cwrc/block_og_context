@@ -1,0 +1,108 @@
+<?php
+
+/**
+ * @file
+ * Code for the OG Context Block Visibility module.
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter() for block_add_block_form().
+ *
+ * Adds OG context visibility options to add block form.
+ */
+function block_og_context_form_block_add_block_form_alter(&$form, &$form_state) {
+  block_og_context_form_block_admin_configure_alter($form, $form_state);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for block_admin_configure().
+ *
+ * Adds OG Context visibility options to block configuration form.
+ */
+function block_og_context_form_block_admin_configure_alter(&$form, &$form_state) {
+  drupal_add_js(drupal_get_path('module', 'block_og_context') . '/block_og_context.js');
+  $default_status = db_query("SELECT status FROM {block_og_context} WHERE module = :module AND delta = :delta", array(
+    ':module' => $form['module']['#value'],
+    ':delta' => $form['delta']['#value'],
+  ))->fetchCol();
+  $form['visibility']['og_context'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('OG Context'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#group' => 'visibility',
+    '#weight' => 20,
+  );
+  $form['visibility']['og_context']['og_context_status'] = array(
+    '#type' => 'select',
+    '#title' => t('Show block based on OG Context'),
+    '#description' => t('Show this block only on pages that are inside or outside OG Context, or ignore OG Context.'),
+    '#options' => array(
+      0 => t('Only show outside OG Context'),
+      1 => t('Only show inside OG Context'),
+    ),
+    '#default_value' => $default_status,
+    '#empty_option' => t('Ignore OG Context'),
+    '#empty_value' => -1,
+  );
+  $form['#submit'][] = 'block_og_context_form_block_admin_configure_submit';
+}
+
+/**
+ * Form submit handler for block configuration form.
+ *
+ * @see block_og_context_form_block_admin_configure_alter()
+ */
+function block_og_context_form_block_admin_configure_submit($form, &$form_state) {
+  db_delete('block_og_context')
+    ->condition('module', $form_state['values']['module'])
+    ->condition('delta', $form_state['values']['delta'])
+    ->execute();
+  if ($form_state['values']['og_context_status'] != -1) {
+    db_insert('block_og_context')
+      ->fields(array(
+        'status' => $form_state['values']['og_context_status'],
+        'module' => $form_state['values']['module'],
+        'delta' => $form_state['values']['delta'],
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_block_list_alter().
+ *
+ * Hide the block if the visibility conditions are not met.
+ */
+function block_og_context_block_list_alter(&$blocks) {
+  global $theme_key;
+  $og_context = og_context();
+
+  // Get information from the block_og_context table.
+  $og_context_blocks = array();
+  $result = db_query('SELECT module, delta, status FROM {block_og_context}');
+  foreach ($result as $record) {
+    $og_context_blocks[$record->module][$record->delta] = $record->status;
+  }
+
+  foreach ($blocks as $key => $block) {
+    if (!isset($block->theme) || !isset($block->status) || $block->theme != $theme_key || $block->status != 1) {
+      // This block was added by a contrib module, leave it in the list.
+      continue;
+    }
+
+    if (isset($og_context_blocks[$block->module][$block->delta])) {
+      $status = $og_context_blocks[$block->module][$block->delta];
+      // Block is configured to only show outside OG context and we are in
+      // OG context, so hide it.
+      if ($status == 0 && $og_context) {
+        unset($blocks[$key]);
+      }
+      // Block is configured to only show inside OG context and we are outside
+      // OG context, so hide it.
+      elseif ($status == 1 && !$og_context) {
+        unset($blocks[$key]);
+      }
+    }
+  }
+}

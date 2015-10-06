@@ -1,0 +1,42 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the block_og_context module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function block_og_context_schema() {
+  $schema['block_og_context'] = array(
+    'description' => 'Sets up display criteria for blocks based on OG context',
+    'fields' => array(
+      'module' => array(
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'description' => "The block's origin module, from {block}.module.",
+      ),
+      'delta' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => "The block's unique delta within module, from {block}.delta.",
+      ),
+      'status' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+        'description' => "Whether to show or hide blocks depending on OG context. 0 to only show outside OG context, 1 to only show inside OG context. Otherwise don't add a row to this table.",
+      ),
+    ),
+    'primary key' => array('module', 'delta', 'status'),
+    'indexes' => array(
+      'status' => array('status'),
+    ),
+  );
+
+  return $schema;
+}

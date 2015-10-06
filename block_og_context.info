@@ -1,0 +1,4 @@
+name = OG Context Block Visibility
+description = Control block visibility based on OG context.
+core = 7.x
+dependencies[] = og_context
