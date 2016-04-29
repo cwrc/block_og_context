@@ -21,10 +21,10 @@ function block_og_context_form_block_add_block_form_alter(&$form, &$form_state) 
  */
 function block_og_context_form_block_admin_configure_alter(&$form, &$form_state) {
   drupal_add_js(drupal_get_path('module', 'block_og_context') . '/block_og_context.js');
-  $default_status = db_query("SELECT status FROM {block_og_context} WHERE module = :module AND delta = :delta", array(
+  $default = db_query("SELECT * FROM {block_og_context} WHERE module = :module AND delta = :delta", array(
     ':module' => $form['module']['#value'],
     ':delta' => $form['delta']['#value'],
-  ))->fetchCol();
+  ))->fetch();
   $form['visibility']['og_context'] = array(
     '#type' => 'fieldset',
     '#title' => t('OG Context'),
@@ -41,9 +41,43 @@ function block_og_context_form_block_admin_configure_alter(&$form, &$form_state)
       0 => t('Only show outside OG Context'),
       1 => t('Only show inside OG Context'),
     ),
-    '#default_value' => $default_status,
+    '#default_value' => $default->status,
     '#empty_option' => t('Ignore OG Context'),
     '#empty_value' => -1,
+  );
+  $form['visibility']['og_context']['og_context_private_group'] = array(
+    '#type' => 'select',
+    '#title' => t('Show block based on group visiblity'),
+    '#description' => t('If there is an OG Context, show this block only on pages that are in private or public groups, or ignore group visiblity.'),
+    '#options' => array(
+      0 => t('Only show in public groups.'),
+      1 => t('Only show in private groups.'),
+    ),
+    '#default_value' => $default->private_group,
+    '#empty_option' => t('Ignore group visiblity'),
+    '#empty_value' => -1,
+    '#states' => array(
+      'invisible' => array(
+        ':input[name="og_context_status"]' => array('value' => 0),
+      ),
+    ),
+  );
+  $form['visibility']['og_context']['og_context_private_content'] = array(
+    '#type' => 'select',
+    '#title' => t('Show block based on content visiblity'),
+    '#description' => t('If there is an OG Context, show this block only on pages that OG thinks are private or public, or ignore content visiblity.'),
+    '#options' => array(
+      0 => t('Only show on public content.'),
+      1 => t('Only show on private content.'),
+    ),
+    '#default_value' => $default->private_content,
+    '#empty_option' => t('Ignore content visiblity'),
+    '#empty_value' => -1,
+    '#states' => array(
+      'invisible' => array(
+        ':input[name="og_context_status"]' => array('value' => 0),
+      ),
+    ),
   );
   $form['#submit'][] = 'block_og_context_form_block_admin_configure_submit';
 }
@@ -58,10 +92,16 @@ function block_og_context_form_block_admin_configure_submit($form, &$form_state)
     ->condition('module', $form_state['values']['module'])
     ->condition('delta', $form_state['values']['delta'])
     ->execute();
-  if ($form_state['values']['og_context_status'] != -1) {
+  $status = $form_state['values']['og_context_status'];
+  $private_group = $form_state['values']['og_context_private_group'];
+  $private_content = $form_state['values']['og_context_private_content'];
+
+  if ($status != -1 || $private_group != -1 || $private_content != -1) {
     db_insert('block_og_context')
       ->fields(array(
-        'status' => $form_state['values']['og_context_status'],
+        'status' => $status,
+        'private_group' => $private_group,
+        'private_content' => $private_content,
         'module' => $form_state['values']['module'],
         'delta' => $form_state['values']['delta'],
       ))
@@ -80,9 +120,9 @@ function block_og_context_block_list_alter(&$blocks) {
 
   // Get information from the block_og_context table.
   $og_context_blocks = array();
-  $result = db_query('SELECT module, delta, status FROM {block_og_context}');
+  $result = db_query('SELECT * FROM {block_og_context}');
   foreach ($result as $record) {
-    $og_context_blocks[$record->module][$record->delta] = $record->status;
+    $og_context_blocks[$record->module][$record->delta] = $record;
   }
 
   foreach ($blocks as $key => $block) {
@@ -91,8 +131,19 @@ function block_og_context_block_list_alter(&$blocks) {
       continue;
     }
 
+    if ($og_context) {
+      $private_group = block_og_context_group_is_private($og_context);
+    }
+
+    if ($node = menu_get_object('node')) {
+      $private_node = block_og_context_node_is_private($node);
+    }
+
     if (isset($og_context_blocks[$block->module][$block->delta])) {
-      $status = $og_context_blocks[$block->module][$block->delta];
+      $status = $og_context_blocks[$block->module][$block->delta]->status;
+      $group_status = $og_context_blocks[$block->module][$block->delta]->private_group;
+      $content_status = $og_context_blocks[$block->module][$block->delta]->private_content;
+
       // Block is configured to only show outside OG context and we are in
       // OG context, so hide it.
       if ($status == 0 && $og_context) {
@@ -103,6 +154,108 @@ function block_og_context_block_list_alter(&$blocks) {
       elseif ($status == 1 && !$og_context) {
         unset($blocks[$key]);
       }
+
+      // Check for private group visiblity.
+      if (isset($private_group)) {
+        // Block is configured to only show in public groups, and this group is
+        // private, so hide it.
+        if ($group_status == 0 && $private_group) {
+          unset($blocks[$key]);
+        }
+
+        // Block is configured to only show in private groups and this group is
+        // public, so hide it.
+        elseif ($group_status == 1 && !$private_group) {
+          unset($blocks[$key]);
+        }
+      }
+
+      // Check for private nodes.
+      if (isset($private_node)) {
+        // Block is configured to only show on public nodes, and this node is
+        // private, so hide it.
+        if ($content_status == 0 && $private_node) {
+          unset($blocks[$key]);
+        }
+
+        // Block is configured to only show on private nodes and this node is
+        // public, so hide it.
+        elseif ($content_status == 1 && !$private_node) {
+          unset($blocks[$key]);
+        }
+      }
     }
   }
+}
+
+/**
+ * Check if a group is private.
+ *
+ * @param array $og_context
+ *   The return from `og_context()` (must contain a group).
+ *
+ * @return bool
+ *   True if the group is private.
+ */
+function block_og_context_group_is_private($og_context) {
+  $wrapper = entity_metadata_wrapper($og_context['group_type'], $og_context['gid']);
+
+  // Check if the node is itself a private group.
+  if (!empty($wrapper->{OG_ACCESS_FIELD}) && $wrapper->{OG_ACCESS_FIELD}->value()) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Checks if og thinks a node is private.
+ *
+ * Heavily based on `og_access_node_access_records`.
+ *
+ * @param object $node
+ *   The node object.
+ *
+ * @return bool
+ *   True if og considers the node to be private.
+ *
+ * @see og_access_node_access_records
+ */
+function block_og_context_node_is_private($node) {
+  $wrapper = entity_metadata_wrapper('node', $node);
+
+  // Check if the node is itself a private group.
+  if (!empty($wrapper->{OG_ACCESS_FIELD}) && $wrapper->{OG_ACCESS_FIELD}->value() && og_is_group('node', $node)) {
+    return TRUE;
+  }
+
+  // If there is no content access field on the group content, we assume
+  // that the group defaults are needed.
+  // This allows us not to have the content access field on the group
+  // content but still have access control.
+  $content_access = !empty($wrapper->{OG_CONTENT_ACCESS_FIELD}) ? $wrapper->{OG_CONTENT_ACCESS_FIELD}->value() : OG_CONTENT_ACCESS_DEFAULT;
+  switch ($content_access) {
+    case OG_CONTENT_ACCESS_DEFAULT:
+      if (!$entity_groups = og_get_entity_groups('node', $node)) {
+        break;
+      }
+
+      foreach ($entity_groups as $group_type => $values) {
+        entity_load($group_type, $values);
+        foreach ($values as $gid) {
+          $group_wrapper = entity_metadata_wrapper($group_type, $gid);
+          if (!empty($group_wrapper->{OG_ACCESS_FIELD}) && $group_wrapper->{OG_ACCESS_FIELD}->value()) {
+            return TRUE;
+          }
+        }
+      }
+
+    case OG_CONTENT_ACCESS_PUBLIC:
+      break;
+
+    case OG_CONTENT_ACCESS_PRIVATE:
+      return TRUE;
+  }
+
+  return FALSE;
 }
