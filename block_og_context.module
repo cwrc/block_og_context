@@ -41,7 +41,7 @@ function block_og_context_form_block_admin_configure_alter(&$form, &$form_state)
       0 => t('Only show outside OG Context'),
       1 => t('Only show inside OG Context'),
     ),
-    '#default_value' => $default->status,
+    '#default_value' => isset($default->status) ? $default->status : NULL,
     '#empty_option' => t('Ignore OG Context'),
     '#empty_value' => -1,
   );
@@ -53,7 +53,7 @@ function block_og_context_form_block_admin_configure_alter(&$form, &$form_state)
       0 => t('Only show in public groups.'),
       1 => t('Only show in private groups.'),
     ),
-    '#default_value' => $default->private_group,
+    '#default_value' => isset($default->private_group) ? $default->private_group : NULL,
     '#empty_option' => t('Ignore group visiblity'),
     '#empty_value' => -1,
     '#states' => array(
@@ -70,7 +70,7 @@ function block_og_context_form_block_admin_configure_alter(&$form, &$form_state)
       0 => t('Only show on public content.'),
       1 => t('Only show on private content.'),
     ),
-    '#default_value' => $default->private_content,
+    '#default_value' => isset($default->private_content) ? $default->private_content : NULL,
     '#empty_option' => t('Ignore content visiblity'),
     '#empty_value' => -1,
     '#states' => array(
