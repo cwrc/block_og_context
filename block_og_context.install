@@ -29,7 +29,21 @@ function block_og_context_schema() {
         'not null' => TRUE,
         'default' => 0,
         'size' => 'tiny',
-        'description' => "Whether to show or hide blocks depending on OG context. 0 to only show outside OG context, 1 to only show inside OG context. Otherwise don't add a row to this table.",
+        'description' => "Whether to show or hide blocks depending on OG context. 0 to only show outside OG context, 1 to only show inside OG context. -1 to ignore context.",
+      ),
+      'private_group' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => -1,
+        'size' => 'tiny',
+        'description' => 'Whether to show or hide blocks depending on OG group visiblity.',
+      ),
+      'private_content' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => -1,
+        'size' => 'tiny',
+        'description' => 'Whether to show or hide blocks depending on OG content visibility.',
       ),
     ),
     'primary key' => array('module', 'delta', 'status'),
@@ -39,4 +53,24 @@ function block_og_context_schema() {
   );
 
   return $schema;
+}
+
+/**
+ * Adds support for group and content visibility.
+ */
+function block_og_context_update_7001() {
+  db_add_field('block_og_context', 'private_group', array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => -1,
+    'size' => 'tiny',
+    'description' => 'Whether to show or hide blocks depending on OG group visiblity.',
+  ));
+  db_add_field('block_og_context', 'private_content', array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => -1,
+    'size' => 'tiny',
+    'description' => 'Whether to show or hide blocks depending on OG content visibility.',
+  ));
 }
