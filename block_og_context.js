@@ -1,3 +1,8 @@
+/**
+ * @file
+ * Client-side scripts for the block_og_context module.
+ */
+
 (function ($) {
 
 /**
