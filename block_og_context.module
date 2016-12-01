@@ -5,6 +5,8 @@
  * Code for the OG Context Block Visibility module.
  */
 
+/* Hooks. */
+
 /**
  * Implements hook_form_FORM_ID_alter() for block_add_block_form().
  *
@@ -80,33 +82,6 @@ function block_og_context_form_block_admin_configure_alter(&$form, &$form_state)
     ),
   );
   $form['#submit'][] = 'block_og_context_form_block_admin_configure_submit';
-}
-
-/**
- * Form submit handler for block configuration form.
- *
- * @see block_og_context_form_block_admin_configure_alter()
- */
-function block_og_context_form_block_admin_configure_submit($form, &$form_state) {
-  db_delete('block_og_context')
-    ->condition('module', $form_state['values']['module'])
-    ->condition('delta', $form_state['values']['delta'])
-    ->execute();
-  $status = $form_state['values']['og_context_status'];
-  $private_group = $form_state['values']['og_context_private_group'];
-  $private_content = $form_state['values']['og_context_private_content'];
-
-  if ($status != -1 || $private_group != -1 || $private_content != -1) {
-    db_insert('block_og_context')
-      ->fields(array(
-        'status' => $status,
-        'private_group' => $private_group,
-        'private_content' => $private_content,
-        'module' => $form_state['values']['module'],
-        'delta' => $form_state['values']['delta'],
-      ))
-      ->execute();
-  }
 }
 
 /**
@@ -187,6 +162,37 @@ function block_og_context_block_list_alter(&$blocks) {
     }
   }
 }
+
+/* Form handlers. */
+
+/**
+ * Form submit handler for block configuration form.
+ *
+ * @see block_og_context_form_block_admin_configure_alter()
+ */
+function block_og_context_form_block_admin_configure_submit($form, &$form_state) {
+  db_delete('block_og_context')
+    ->condition('module', $form_state['values']['module'])
+    ->condition('delta', $form_state['values']['delta'])
+    ->execute();
+  $status = $form_state['values']['og_context_status'];
+  $private_group = $form_state['values']['og_context_private_group'];
+  $private_content = $form_state['values']['og_context_private_content'];
+
+  if ($status != -1 || $private_group != -1 || $private_content != -1) {
+    db_insert('block_og_context')
+      ->fields(array(
+        'status' => $status,
+        'private_group' => $private_group,
+        'private_content' => $private_content,
+        'module' => $form_state['values']['module'],
+        'delta' => $form_state['values']['delta'],
+      ))
+      ->execute();
+  }
+}
+
+/* Helper functions. */
 
 /**
  * Check if a group is private.
